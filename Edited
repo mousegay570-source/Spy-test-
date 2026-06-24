@@ -1,0 +1,918 @@
+if _G.SimpleSpyExecuted and type(_G.SimpleSpyShutdown) == "function" then
+    print(pcall(_G.SimpleSpyShutdown))
+end
+
+-- ============================================================
+--  COMPATIBILITY SHIMS
+-- ============================================================
+if not getgenv then getgenv = function() return getfenv(0) end end
+if not getnilinstances then getnilinstances = function() return {} end end
+if not newcclosure then newcclosure = function(f) return f end end
+if not islclosure then islclosure = function(f) local ok, res = pcall(function() return not iscclosure(f) end) return ok and res or false end end
+if not iscclosure then iscclosure = function() return false end end
+if not getrawmetatable then getrawmetatable = function(o) return getmetatable(o) end end
+if not setreadonly then setreadonly = function() end end
+if not hookfunction then hookfunction = function(func, hook) return func end end
+if not hookmetamethod then hookmetamethod = nil end
+if not getnamecallmethod then getnamecallmethod = function() return "" end end
+if not setnamecallmethod then setnamecallmethod = function() end end
+if not getcallingscript then getcallingscript = function() return nil end end
+if not identifyexecutor then identifyexecutor = function() return "Unknown" end end
+if not getexecutorname then getexecutorname = identifyexecutor end
+
+if not debug then debug = {} end
+if not debug.getinfo then debug.getinfo = function() return { name = "" } end end
+if not debug.getconstants then debug.getconstants = function() return {} end end
+if not debug.getupvalues then debug.getupvalues = function() return {} end end
+if not debug.getprotos then debug.getprotos = function() return {} end end
+
+if not decompile then decompile = function() return "" end end
+if not getscripts then getscripts = function() return {} end end
+if not getscriptbytecode then getscriptbytecode = function() return "" end end
+
+if not setclipboard then
+    if toclipboard then setclipboard = toclipboard
+    elseif Clipboard and Clipboard.set then setclipboard = Clipboard.set
+    else setclipboard = function(s) warn("[SimpleSpy] setclipboard not supported") end end
+end
+
+if not syn then syn = {} end
+if not syn.protect_gui then syn.protect_gui = function() end end
+
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
+local HttpService = game:GetService("HttpService")
+
+local function getSafeGuiParent()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
+    end
+    local ok = pcall(function() local t = Instance.new("ScreenGui"); t.Parent = CoreGui; t:Destroy() end)
+    if ok then return CoreGui end
+    if Players.LocalPlayer then return Players.LocalPlayer:WaitForChild("PlayerGui") end
+    return CoreGui
+end
+
+-- ============================================================
+--  HIGHLIGHT LIBRARY
+-- ============================================================
+local _highlightOk, Highlight = pcall(function()
+    local src = game:HttpGet("https://github.com/exxtremestuffs/SimpleSpySource/raw/master/highlight.lua")
+    return loadstring(src)()
+end)
+if not _highlightOk or not Highlight then
+    Highlight = {
+        new = function(frame)
+            local box = Instance.new("TextBox")
+            box.Name = "CodeBox"
+            box.Parent = frame
+            box.BackgroundTransparency = 1
+            box.Size = UDim2.new(1, 0, 1, 0)
+            box.Font = Enum.Font.Code
+            box.TextSize = 12
+            box.TextColor3 = Color3.new(1,1,1)
+            box.TextXAlignment = Enum.TextXAlignment.Left
+            box.TextYAlignment = Enum.TextYAlignment.Top
+            box.ClearTextOnFocus = false
+            box.MultiLine = true
+            box.Text = ""
+            return {
+                setRaw = function(self, s) box.Text = tostring(s or "") end,
+                getString = function(self) return box.Text end,
+            }
+        end
+    }
+end
+
+-- ============================================================
+--  UI CREATION - MODERN GLASSMORPHISM
+-- ============================================================
+local SimpleSpy2 = Instance.new("ScreenGui")
+SimpleSpy2.Name = "SimpleSpy2"
+SimpleSpy2.ResetOnSpawn = false
+SimpleSpy2.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local _safeParent = getSafeGuiParent()
+local SpyFind = _safeParent:FindFirstChild(SimpleSpy2.Name)
+if SpyFind and SpyFind ~= SimpleSpy2 then SpyFind:Destroy() end
+
+-- ============================================================
+--  OPEN BUTTON
+-- ============================================================
+local OpenButtonGui = Instance.new("ScreenGui")
+OpenButtonGui.Name = "SimpleSpy_OpenBtn"
+OpenButtonGui.ResetOnSpawn = false
+OpenButtonGui.DisplayOrder = 999
+
+local OBFrame = Instance.new("Frame")
+OBFrame.Name = "OBFrame"
+OBFrame.Parent = OpenButtonGui
+OBFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+OBFrame.BorderSizePixel = 0
+OBFrame.Position = UDim2.new(0.5, -25, 0, 8)
+OBFrame.Size = UDim2.new(0, 50, 0, 24)
+OBFrame.Active = true
+
+local OBCorner = Instance.new("UICorner")
+OBCorner.CornerRadius = UDim.new(1, 0)
+OBCorner.Parent = OBFrame
+
+local OBStroke = Instance.new("UIStroke")
+OBStroke.Color = Color3.fromRGB(100, 150, 255)
+OBStroke.Thickness = 2
+OBStroke.Parent = OBFrame
+
+-- Glow effect
+local OBGlow = Instance.new("UIGradient")
+OBGlow.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 150, 255)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(150, 100, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 150, 255))
+})
+OBGlow.Parent = OBStroke
+
+local OBLabel = Instance.new("TextLabel")
+OBLabel.Parent = OBFrame
+OBLabel.BackgroundTransparency = 1
+OBLabel.Position = UDim2.new(0, 0, 0, 0)
+OBLabel.Size = UDim2.new(1, 0, 1, 0)
+OBLabel.Font = Enum.Font.GothamBold
+OBLabel.Text = "SPY"
+OBLabel.TextSize = 11
+OBLabel.TextColor3 = Color3.fromRGB(120, 170, 255)
+
+local OBBtn = Instance.new("TextButton")
+OBBtn.Parent = OBFrame
+OBBtn.BackgroundTransparency = 1
+OBBtn.Size = UDim2.new(1, 0, 1, 0)
+OBBtn.Text = ""
+OBBtn.ZIndex = 2
+
+-- ============================================================
+--  MAIN UI
+-- ============================================================
+local Background = Instance.new("Frame")
+Background.Name = "Background"
+Background.Parent = SimpleSpy2
+Background.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Background.BackgroundTransparency = 0.05
+Background.Position = UDim2.new(0, 160, 0, 100)
+Background.Size = UDim2.new(0, 500, 0, 350)
+Background.Active = true
+Background.Draggable = true
+
+-- Glassmorphism background
+local GlassBg = Instance.new("Frame")
+GlassBg.Parent = Background
+GlassBg.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+GlassBg.BackgroundTransparency = 0.15
+GlassBg.Size = UDim2.new(1, 0, 1, 0)
+GlassBg.ZIndex = 0
+
+local GlassCorner = Instance.new("UICorner")
+GlassCorner.CornerRadius = UDim.new(0, 12)
+GlassCorner.Parent = GlassBg
+
+local GlassStroke = Instance.new("UIStroke")
+GlassStroke.Color = Color3.fromRGB(255, 255, 255)
+GlassStroke.Thickness = 1
+GlassStroke.Transparency = 0.5
+GlassStroke.Parent = GlassBg
+
+-- ============================================================
+--  TOP BAR - MODERN
+-- ============================================================
+local TopBar = Instance.new("Frame")
+TopBar.Parent = Background
+TopBar.BackgroundColor3 = Color3.fromRGB(25, 25, 40)
+TopBar.BackgroundTransparency = 0.3
+TopBar.BorderSizePixel = 0
+TopBar.Size = UDim2.new(1, 0, 0, 36)
+
+local TopCorner = Instance.new("UICorner")
+TopCorner.CornerRadius = UDim.new(0, 12)
+TopCorner.Parent = TopBar
+
+local TopStroke = Instance.new("UIStroke")
+TopStroke.Color = Color3.fromRGB(255, 255, 255)
+TopStroke.Thickness = 1
+TopStroke.Transparency = 0.3
+TopStroke.Parent = TopBar
+
+local Title = Instance.new("TextLabel")
+Title.Parent = TopBar
+Title.BackgroundTransparency = 1
+Title.Position = UDim2.new(0, 12, 0, 0)
+Title.Size = UDim2.new(0, 200, 0, 36)
+Title.Font = Enum.Font.GothamBold
+Title.Text = "✦ SimpleSpy v2"
+Title.TextColor3 = Color3.fromRGB(180, 200, 255)
+Title.TextSize = 14
+Title.TextXAlignment = Enum.TextXAlignment.Left
+
+-- Search Bar
+local SearchBox = Instance.new("TextBox")
+SearchBox.Parent = TopBar
+SearchBox.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+SearchBox.BorderSizePixel = 0
+SearchBox.Position = UDim2.new(0, 220, 0, 8)
+SearchBox.Size = UDim2.new(0, 150, 0, 20)
+SearchBox.Font = Enum.Font.Gotham
+SearchBox.PlaceholderText = "🔍 Search..."
+SearchBox.PlaceholderColor3 = Color3.fromRGB(120, 120, 150)
+SearchBox.Text = ""
+SearchBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+SearchBox.TextSize = 11
+SearchBox.ClearTextOnFocus = false
+
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 8)
+SearchCorner.Parent = SearchBox
+
+-- Control Buttons
+local MinimizeBtn = Instance.new("TextButton")
+MinimizeBtn.Parent = TopBar
+MinimizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+MinimizeBtn.BorderSizePixel = 0
+MinimizeBtn.Position = UDim2.new(1, -75, 0, 6)
+MinimizeBtn.Size = UDim2.new(0, 20, 0, 24)
+MinimizeBtn.Font = Enum.Font.GothamBold
+MinimizeBtn.Text = "─"
+MinimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+MinimizeBtn.TextSize = 14
+MinimizeBtn.AutoButtonColor = false
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 4)
+MinCorner.Parent = MinimizeBtn
+
+local MaximizeBtn = Instance.new("TextButton")
+MaximizeBtn.Parent = TopBar
+MaximizeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+MaximizeBtn.BorderSizePixel = 0
+MaximizeBtn.Position = UDim2.new(1, -52, 0, 6)
+MaximizeBtn.Size = UDim2.new(0, 20, 0, 24)
+MaximizeBtn.Font = Enum.Font.GothamBold
+MaximizeBtn.Text = "□"
+MaximizeBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+MaximizeBtn.TextSize = 12
+MaximizeBtn.AutoButtonColor = false
+
+local MaxCorner = Instance.new("UICorner")
+MaxCorner.CornerRadius = UDim.new(0, 4)
+MaxCorner.Parent = MaximizeBtn
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Parent = TopBar
+CloseBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+CloseBtn.BorderSizePixel = 0
+CloseBtn.Position = UDim2.new(1, -29, 0, 6)
+CloseBtn.Size = UDim2.new(0, 20, 0, 24)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+CloseBtn.TextSize = 12
+CloseBtn.AutoButtonColor = false
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 4)
+CloseCorner.Parent = CloseBtn
+
+-- ============================================================
+--  LEFT PANEL - LOG LIST
+-- ============================================================
+local LeftPanel = Instance.new("Frame")
+LeftPanel.Name = "LeftPanel"
+LeftPanel.Parent = Background
+LeftPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+LeftPanel.BackgroundTransparency = 0.5
+LeftPanel.BorderSizePixel = 0
+LeftPanel.Position = UDim2.new(0, 0, 0, 36)
+LeftPanel.Size = UDim2.new(0, 160, 0, 314)
+
+local LeftCorner = Instance.new("UICorner")
+LeftCorner.CornerRadius = UDim.new(0, 0)
+LeftCorner.Parent = LeftPanel
+
+local LogList = Instance.new("ScrollingFrame")
+LogList.Name = "LogList"
+LogList.Parent = LeftPanel
+LogList.Active = true
+LogList.BackgroundColor3 = Color3.new(1, 1, 1)
+LogList.BackgroundTransparency = 1
+LogList.BorderSizePixel = 0
+LogList.Position = UDim2.new(0, 0, 0, 4)
+LogList.Size = UDim2.new(0, 160, 0, 220)
+LogList.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LogList.ScrollBarThickness = 3
+LogList.ScrollingEnabled = true
+LogList.ScrollBarImageColor3 = Color3.fromRGB(100, 150, 255)
+LogList.ElasticBehavior = Enum.ElasticBehavior.Never
+LogList.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = LogList
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, 2)
+
+-- Block Panel
+local BlockPanel = Instance.new("Frame")
+BlockPanel.Name = "BlockPanel"
+BlockPanel.Parent = LeftPanel
+BlockPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+BlockPanel.BackgroundTransparency = 0.3
+BlockPanel.BorderSizePixel = 0
+BlockPanel.Position = UDim2.new(0, 0, 1, -70)
+BlockPanel.Size = UDim2.new(1, 0, 0, 70)
+BlockPanel.ZIndex = 3
+
+local BPCorner = Instance.new("UICorner")
+BPCorner.CornerRadius = UDim.new(0, 0)
+BPCorner.Parent = BlockPanel
+
+local BPDiv = Instance.new("Frame")
+BPDiv.Parent = BlockPanel
+BPDiv.BackgroundColor3 = Color3.fromRGB(100, 150, 255)
+BPDiv.BorderSizePixel = 0
+BPDiv.Position = UDim2.new(0, 8, 0, 0)
+BPDiv.Size = UDim2.new(1, -16, 0, 1)
+BPDiv.ZIndex = 4
+
+local BPTitle = Instance.new("TextLabel")
+BPTitle.Parent = BlockPanel
+BPTitle.BackgroundTransparency = 1
+BPTitle.Position = UDim2.new(0, 8, 0, 4)
+BPTitle.Size = UDim2.new(1, -16, 0, 14)
+BPTitle.ZIndex = 4
+BPTitle.Font = Enum.Font.GothamBold
+BPTitle.Text = "⛔ BLOCK BY NAME"
+BPTitle.TextColor3 = Color3.fromRGB(100, 150, 255)
+BPTitle.TextSize = 9
+BPTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local BPBlockBtn = Instance.new("TextButton")
+BPBlockBtn.Name = "BPBlockBtn"
+BPBlockBtn.Parent = BlockPanel
+BPBlockBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+BPBlockBtn.BorderSizePixel = 0
+BPBlockBtn.Position = UDim2.new(0, 8, 0, 22)
+BPBlockBtn.Size = UDim2.new(0, 65, 0, 20)
+BPBlockBtn.ZIndex = 4
+BPBlockBtn.Font = Enum.Font.GothamBold
+BPBlockBtn.Text = "Block (n)"
+BPBlockBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BPBlockBtn.TextSize = 9
+BPBlockBtn.AutoButtonColor = false
+
+local BPBlockCorner = Instance.new("UICorner")
+BPBlockCorner.CornerRadius = UDim.new(0, 6)
+BPBlockCorner.Parent = BPBlockBtn
+
+local BPClearBtn = Instance.new("TextButton")
+BPClearBtn.Name = "BPClearBtn"
+BPClearBtn.Parent = BlockPanel
+BPClearBtn.BackgroundColor3 = Color3.fromRGB(50, 160, 100)
+BPClearBtn.BorderSizePixel = 0
+BPClearBtn.Position = UDim2.new(0, 78, 0, 22)
+BPClearBtn.Size = UDim2.new(0, 65, 0, 20)
+BPClearBtn.ZIndex = 4
+BPClearBtn.Font = Enum.Font.GothamBold
+BPClearBtn.Text = "Clr Block"
+BPClearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BPClearBtn.TextSize = 9
+BPClearBtn.AutoButtonColor = false
+
+local BPClearCorner = Instance.new("UICorner")
+BPClearCorner.CornerRadius = UDim.new(0, 6)
+BPClearCorner.Parent = BPClearBtn
+
+local BPStatus = Instance.new("TextLabel")
+BPStatus.Parent = BlockPanel
+BPStatus.BackgroundTransparency = 1
+BPStatus.Position = UDim2.new(0, 8, 0, 46)
+BPStatus.Size = UDim2.new(1, -16, 0, 18)
+BPStatus.ZIndex = 4
+BPStatus.Font = Enum.Font.Gotham
+BPStatus.Text = "Select a remote first"
+BPStatus.TextColor3 = Color3.fromRGB(160, 160, 180)
+BPStatus.TextSize = 8
+BPStatus.TextXAlignment = Enum.TextXAlignment.Left
+BPStatus.TextTruncate = Enum.TextTruncate.AtEnd
+
+-- ============================================================
+--  RIGHT PANEL - CODE VIEWER
+-- ============================================================
+local RightPanel = Instance.new("Frame")
+RightPanel.Name = "RightPanel"
+RightPanel.Parent = Background
+RightPanel.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
+RightPanel.BackgroundTransparency = 0.5
+RightPanel.BorderSizePixel = 0
+RightPanel.Position = UDim2.new(0, 160, 0, 36)
+RightPanel.Size = UDim2.new(1, -160, 0, 314)
+
+local RightCorner = Instance.new("UICorner")
+RightCorner.CornerRadius = UDim.new(0, 12)
+RightCorner.Parent = RightPanel
+
+-- Code Box
+local CodeBox = Instance.new("Frame")
+CodeBox.Name = "CodeBox"
+CodeBox.Parent = RightPanel
+CodeBox.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
+CodeBox.BorderSizePixel = 0
+CodeBox.Size = UDim2.new(1, 0, 0, 180)
+
+local CodeCorner = Instance.new("UICorner")
+CodeCorner.CornerRadius = UDim.new(0, 0)
+CodeCorner.Parent = CodeBox
+
+local CodeTextBox = Instance.new("TextBox")
+CodeTextBox.Name = "CodeTextBox"
+CodeTextBox.Parent = CodeBox
+CodeTextBox.BackgroundTransparency = 1
+CodeTextBox.Size = UDim2.new(1, -10, 1, -10)
+CodeTextBox.Position = UDim2.new(0, 5, 0, 5)
+CodeTextBox.Font = Enum.Font.Code
+CodeTextBox.TextSize = 11
+CodeTextBox.TextColor3 = Color3.fromRGB(200, 220, 255)
+CodeTextBox.TextXAlignment = Enum.TextXAlignment.Left
+CodeTextBox.TextYAlignment = Enum.TextYAlignment.Top
+CodeTextBox.ClearTextOnFocus = false
+CodeTextBox.MultiLine = true
+CodeTextBox.Text = "-- Select a remote to view script"
+
+-- Action Buttons
+local ActionPanel = Instance.new("Frame")
+ActionPanel.Parent = RightPanel
+ActionPanel.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+ActionPanel.BackgroundTransparency = 0.3
+ActionPanel.BorderSizePixel = 0
+ActionPanel.Position = UDim2.new(0, 0, 0, 180)
+ActionPanel.Size = UDim2.new(1, 0, 0, 134)
+
+local ActionCorner = Instance.new("UICorner")
+ActionCorner.CornerRadius = UDim.new(0, 12)
+ActionCorner.Parent = ActionPanel
+
+-- Buttons grid
+local ButtonGrid = Instance.new("Frame")
+ButtonGrid.Parent = ActionPanel
+ButtonGrid.BackgroundTransparency = 1
+ButtonGrid.Position = UDim2.new(0, 10, 0, 10)
+ButtonGrid.Size = UDim2.new(1, -20, 0, 114)
+
+local function createActionButton(text, color, yPos)
+    local btn = Instance.new("TextButton")
+    btn.Parent = ButtonGrid
+    btn.BackgroundColor3 = color
+    btn.BackgroundTransparency = 0.2
+    btn.BorderSizePixel = 0
+    btn.Position = UDim2.new(0, 0, 0, yPos)
+    btn.Size = UDim2.new(1, 0, 0, 30)
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 11
+    btn.AutoButtonColor = false
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 8)
+    btnCorner.Parent = btn
+    
+    return btn
+end
+
+local CopyBtn = createActionButton("📋 Copy Script", Color3.fromRGB(60, 120, 255), 0)
+local ExecuteBtn = createActionButton("▶ Execute Script", Color3.fromRGB(60, 200, 100), 35)
+local BlockBtn = createActionButton("⛔ Block Remote", Color3.fromRGB(200, 60, 60), 70)
+
+-- ============================================================
+--  LOGIC VARIABLES
+-- ============================================================
+local logs = {}
+local selected = nil
+local blocklist = {}
+local nameBlocklist = {}
+local remoteLogs = {}
+local logCount = 0
+local toggle = false
+local original = nil
+local gm = nil
+local codebox = {
+    setRaw = function(self, s) CodeTextBox.Text = tostring(s or "") end,
+    getString = function(self) return CodeTextBox.Text end
+}
+local nameBlocklist = {}
+
+-- ============================================================
+--  IMPROVED DECOMPILER FUNCTIONS
+-- ============================================================
+local function formatString(str)
+    if not str then return '""' end
+    return string.format("%q", str)
+end
+
+local function instanceToString(inst)
+    if not inst or type(inst) ~= "userdata" then return "nil" end
+    local ok, result = pcall(function()
+        if inst:IsA("Instance") then
+            return "game:GetService(\"" .. inst.ClassName .. "\")" -- simplified
+        end
+        return "nil"
+    end)
+    if ok then return result else return "nil" end
+end
+
+local function valueToString(value, depth)
+    depth = depth or 0
+    if depth > 10 then return "..." end
+    
+    local t = type(value)
+    if t == "nil" then return "nil"
+    elseif t == "number" then return tostring(value)
+    elseif t == "boolean" then return tostring(value)
+    elseif t == "string" then return formatString(value)
+    elseif t == "function" then return "function() end"
+    elseif t == "table" then
+        local result = "{"
+        local count = 0
+        for k, v in pairs(value) do
+            count = count + 1
+            if count > 50 then
+                result = result .. "..."
+                break
+            end
+            if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+                result = result .. k .. " = " .. valueToString(v, depth + 1) .. ", "
+            else
+                result = result .. "[" .. valueToString(k, depth + 1) .. "] = " .. valueToString(v, depth + 1) .. ", "
+            end
+        end
+        result = result .. "}"
+        return result
+    elseif t == "userdata" then
+        if typeof(value) == "Instance" then
+            return "game:GetService(\"" .. value.ClassName .. "\")"
+        end
+        return "newproxy()"
+    end
+    return "nil"
+end
+
+local function generateScript(remote, args)
+    local script = ""
+    if #args > 0 then
+        script = script .. "local args = " .. valueToString(args) .. "\n\n"
+        if remote:IsA("RemoteEvent") then
+            script = script .. "game:GetService(\"" .. remote.ClassName .. "\"):FireServer(unpack(args))"
+        elseif remote:IsA("RemoteFunction") then
+            script = script .. "game:GetService(\"" .. remote.ClassName .. "\"):InvokeServer(unpack(args))"
+        end
+    else
+        if remote:IsA("RemoteEvent") then
+            script = script .. "game:GetService(\"" .. remote.ClassName .. "\"):FireServer()"
+        elseif remote:IsA("RemoteFunction") then
+            script = script .. "game:GetService(\"" .. remote.ClassName .. "\"):InvokeServer()"
+        end
+    end
+    return script
+end
+
+-- ============================================================
+--  REMOTE LOGGING - FIX DUPLICATE
+-- ============================================================
+local processedRemotes = {}
+local lastRemoteLog = {}
+
+local function newRemote(type, name, args, remote, blocked)
+    -- Check for duplicate (same remote, same args within 1 second)
+    local key = tostring(remote) .. ":" .. tostring(name) .. ":" .. tostring(args)
+    local now = tick()
+    if lastRemoteLog[key] and (now - lastRemoteLog[key] < 1) then
+        return -- Skip duplicate
+    end
+    lastRemoteLog[key] = now
+    
+    -- Check name blocklist
+    if nameBlocklist[name] then return end
+    
+    logCount = logCount + 1
+    
+    local displayName = string.sub(name, 1, 40)
+    local typePrefix = (type == "event") and "📡 " or "⚡ "
+    displayName = typePrefix .. "[" .. logCount .. "] " .. displayName
+    
+    -- Create log entry
+    local remoteFrame = Instance.new("Frame")
+    remoteFrame.Parent = LogList
+    remoteFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+    remoteFrame.BackgroundTransparency = 0.3
+    remoteFrame.Size = UDim2.new(0, 150, 0, 24)
+    remoteFrame.LayoutOrder = 999999999 - logCount
+    
+    local frameCorner = Instance.new("UICorner")
+    frameCorner.CornerRadius = UDim.new(0, 6)
+    frameCorner.Parent = remoteFrame
+    
+    local colorBar = Instance.new("Frame")
+    colorBar.Parent = remoteFrame
+    colorBar.BackgroundColor3 = (type == "event") and Color3.fromRGB(255, 200, 50) or Color3.fromRGB(100, 150, 255)
+    colorBar.BorderSizePixel = 0
+    colorBar.Position = UDim2.new(0, 0, 0, 2)
+    colorBar.Size = UDim2.new(0, 4, 0, 20)
+    
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(0, 4)
+    barCorner.Parent = colorBar
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Parent = remoteFrame
+    textLabel.BackgroundTransparency = 1
+    textLabel.Position = UDim2.new(0, 8, 0, 0)
+    textLabel.Size = UDim2.new(1, -8, 0, 24)
+    textLabel.Font = Enum.Font.Gotham
+    textLabel.Text = displayName
+    textLabel.TextColor3 = Color3.fromRGB(220, 220, 240)
+    textLabel.TextSize = 10
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    
+    local btn = Instance.new("TextButton")
+    btn.Parent = remoteFrame
+    btn.BackgroundTransparency = 1
+    btn.Size = UDim2.new(1, 0, 1, 0)
+    btn.Text = ""
+    btn.ZIndex = 2
+    
+    local logData = {
+        Name = name,
+        Type = type,
+        Number = logCount,
+        Remote = remote,
+        Args = args,
+        Blocked = blocked,
+        Log = remoteFrame,
+        GenScript = generateScript(remote, args)
+    }
+    
+    table.insert(logs, logData)
+    
+    btn.MouseButton1Click:Connect(function()
+        selectRemote(logData)
+    end)
+    
+    updateRemoteCanvas()
+end
+
+function selectRemote(logData)
+    if selected then
+        if selected.Log and selected.Log.BackgroundColor3 then
+            selected.Log.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        end
+    end
+    selected = logData
+    if selected and selected.Log then
+        selected.Log.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
+        codebox:setRaw(selected.GenScript or "-- No script generated")
+        BPStatus.Text = "Selected: " .. tostring(selected.Name)
+        BPStatus.TextColor3 = Color3.fromRGB(200, 200, 100)
+    end
+end
+
+function updateRemoteCanvas()
+    LogList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
+    LogList.CanvasPosition = Vector2.new(0, 0)
+end
+
+-- ============================================================
+--  HOOKING SYSTEM - FIX BUGS
+-- ============================================================
+local originalFireServer = nil
+local originalInvokeServer = nil
+local remoteEvent = Instance.new("RemoteEvent")
+local remoteFunction = Instance.new("RemoteFunction")
+
+local function hookRemote(type, remote, ...)
+    if type == "event" then
+        return originalFireServer(remote, ...)
+    else
+        return originalInvokeServer(remote, ...)
+    end
+end
+
+local function toggleSpy()
+    toggle = not toggle
+    
+    if toggle then
+        -- Hook RemoteEvent.FireServer
+        pcall(function()
+            originalFireServer = hookfunction(remoteEvent.FireServer, function(remote, ...)
+                local args = {...}
+                task.spawn(function()
+                    newRemote("event", remote.Name, args, remote, false)
+                end)
+                return originalFireServer(remote, ...)
+            end)
+        end)
+        
+        -- Hook RemoteFunction.InvokeServer
+        pcall(function()
+            originalInvokeServer = hookfunction(remoteFunction.InvokeServer, function(remote, ...)
+                local args = {...}
+                task.spawn(function()
+                    newRemote("function", remote.Name, args, remote, false)
+                end)
+                return originalInvokeServer(remote, ...)
+            end)
+        end)
+        
+        Title.Text = "✦ SimpleSpy v2 [ACTIVE]"
+        Title.TextColor3 = Color3.fromRGB(100, 255, 150)
+    else
+        -- Unhook
+        pcall(function()
+            if originalFireServer then
+                hookfunction(remoteEvent.FireServer, originalFireServer)
+            end
+        end)
+        pcall(function()
+            if originalInvokeServer then
+                hookfunction(remoteFunction.InvokeServer, originalInvokeServer)
+            end
+        end)
+        
+        Title.Text = "✦ SimpleSpy v2 [INACTIVE]"
+        Title.TextColor3 = Color3.fromRGB(180, 200, 255)
+    end
+end
+
+-- ============================================================
+--  UI EVENT HANDLERS
+-- ============================================================
+-- Open Button
+OBBtn.MouseButton1Click:Connect(function()
+    Background.Visible = not Background.Visible
+    if Background.Visible then
+        TweenService:Create(Background, TweenInfo.new(0.3), { BackgroundTransparency = 0.05 }):Play()
+    end
+end)
+
+-- Search
+SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    local query = SearchBox.Text:lower()
+    for _, log in pairs(logs) do
+        if log.Log and log.Log.Visible ~= nil then
+            local name = (log.Name or ""):lower()
+            log.Log.Visible = query == "" or name:find(query) ~= nil
+        end
+    end
+end)
+
+-- Control Buttons
+CloseBtn.MouseButton1Click:Connect(function()
+    SimpleSpy2:Destroy()
+    OpenButtonGui:Destroy()
+    _G.SimpleSpyExecuted = false
+end)
+
+MinimizeBtn.MouseButton1Click:Connect(function()
+    if LeftPanel.Size.X.Offset > 10 then
+        TweenService:Create(LeftPanel, TweenInfo.new(0.3), { Size = UDim2.new(0, 0, 0, 314) }):Play()
+        TweenService:Create(RightPanel, TweenInfo.new(0.3), { 
+            Size = UDim2.new(1, 0, 0, 314),
+            Position = UDim2.new(0, 0, 0, 36)
+        }):Play()
+    else
+        TweenService:Create(LeftPanel, TweenInfo.new(0.3), { Size = UDim2.new(0, 160, 0, 314) }):Play()
+        TweenService:Create(RightPanel, TweenInfo.new(0.3), { 
+            Size = UDim2.new(1, -160, 0, 314),
+            Position = UDim2.new(0, 160, 0, 36)
+        }):Play()
+    end
+end)
+
+MaximizeBtn.MouseButton1Click:Connect(function()
+    if Background.Size.X.Offset < 800 then
+        TweenService:Create(Background, TweenInfo.new(0.3), { 
+            Size = UDim2.new(0, 800, 0, 500),
+            Position = UDim2.new(0, 50, 0, 50)
+        }):Play()
+    else
+        TweenService:Create(Background, TweenInfo.new(0.3), { 
+            Size = UDim2.new(0, 500, 0, 350),
+            Position = UDim2.new(0, 160, 0, 100)
+        }):Play()
+    end
+end)
+
+-- Action Buttons
+CopyBtn.MouseButton1Click:Connect(function()
+    if selected then
+        local script = selected.GenScript or ""
+        setclipboard(script)
+        CopyBtn.Text = "✅ Copied!"
+        task.wait(1)
+        CopyBtn.Text = "📋 Copy Script"
+    end
+end)
+
+ExecuteBtn.MouseButton1Click:Connect(function()
+    if selected and selected.GenScript then
+        local success, err = pcall(loadstring, selected.GenScript)
+        if success then
+            success, err = pcall(success)
+        end
+        if success then
+            ExecuteBtn.Text = "✅ Executed!"
+        else
+            ExecuteBtn.Text = "❌ Error!"
+            warn("Execution error: " .. tostring(err))
+        end
+        task.wait(1.5)
+        ExecuteBtn.Text = "▶ Execute Script"
+    end
+end)
+
+BlockBtn.MouseButton1Click:Connect(function()
+    if selected then
+        local name = selected.Name
+        if nameBlocklist[name] then
+            nameBlocklist[name] = nil
+            BlockBtn.Text = "✅ Unblocked!"
+        else
+            nameBlocklist[name] = true
+            BlockBtn.Text = "⛔ Blocked!"
+        end
+        task.wait(1)
+        BlockBtn.Text = "⛔ Block Remote"
+        
+        -- Refresh log visibility
+        for _, log in pairs(logs) do
+            if log.Log then
+                log.Log.Visible = not nameBlocklist[log.Name]
+            end
+        end
+    end
+end)
+
+-- Block Panel Buttons
+BPBlockBtn.MouseButton1Click:Connect(function()
+    if selected then
+        local name = selected.Name
+        nameBlocklist[name] = true
+        BPStatus.Text = "Blocked: " .. name
+        BPStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        
+        for _, log in pairs(logs) do
+            if log.Log and log.Name == name then
+                log.Log.Visible = false
+            end
+        end
+    end
+end)
+
+BPClearBtn.MouseButton1Click:Connect(function()
+    nameBlocklist = {}
+    BPStatus.Text = "All blocks cleared"
+    BPStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
+    
+    for _, log in pairs(logs) do
+        if log.Log then
+            log.Log.Visible = true
+        end
+    end
+end)
+
+-- Toggle Spy (Click on title)
+Title.MouseButton1Click:Connect(toggleSpy)
+
+-- ============================================================
+--  INITIALIZATION
+-- ============================================================
+Background.Visible = true
+Title.Text = "✦ SimpleSpy v2 [INACTIVE]"
+Title.TextColor3 = Color3.fromRGB(180, 200, 255)
+
+-- Auto-start logging
+task.wait(0.5)
+toggleSpy()
+
+_G.SimpleSpyExecuted = true
+_G.SimpleSpyShutdown = function()
+    if toggle then toggleSpy() end
+    SimpleSpy2:Destroy()
+    OpenButtonGui:Destroy()
+    _G.SimpleSpyExecuted = false
+end
+
+print("✅ SimpleSpy v2 Loaded Successfully!")
+print("📌 Click the SPY button to toggle UI")
+print("📌 Click the title to toggle logging")
