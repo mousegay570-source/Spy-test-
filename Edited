@@ -204,16 +204,18 @@ TopStroke.Thickness = 1
 TopStroke.Transparency = 0.3
 TopStroke.Parent = TopBar
 
-local Title = Instance.new("TextLabel")
-Title.Parent = TopBar
-Title.BackgroundTransparency = 1
-Title.Position = UDim2.new(0, 12, 0, 0)
-Title.Size = UDim2.new(0, 200, 0, 36)
-Title.Font = Enum.Font.GothamBold
-Title.Text = "✦ SimpleSpy v2"
-Title.TextColor3 = Color3.fromRGB(180, 200, 255)
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
+-- Title sebagai TextButton agar bisa diklik
+local TitleBtn = Instance.new("TextButton")
+TitleBtn.Parent = TopBar
+TitleBtn.BackgroundTransparency = 1
+TitleBtn.Position = UDim2.new(0, 12, 0, 0)
+TitleBtn.Size = UDim2.new(0, 200, 0, 36)
+TitleBtn.Font = Enum.Font.GothamBold
+TitleBtn.Text = "✦ SimpleSpy v2"
+TitleBtn.TextColor3 = Color3.fromRGB(180, 200, 255)
+TitleBtn.TextSize = 14
+TitleBtn.TextXAlignment = Enum.TextXAlignment.Left
+TitleBtn.AutoButtonColor = false
 
 -- Search Bar
 local SearchBox = Instance.new("TextBox")
@@ -510,7 +512,6 @@ local codebox = {
     setRaw = function(self, s) CodeTextBox.Text = tostring(s or "") end,
     getString = function(self) return CodeTextBox.Text end
 }
-local nameBlocklist = {}
 
 -- ============================================================
 --  IMPROVED DECOMPILER FUNCTIONS
@@ -524,7 +525,7 @@ local function instanceToString(inst)
     if not inst or type(inst) ~= "userdata" then return "nil" end
     local ok, result = pcall(function()
         if inst:IsA("Instance") then
-            return "game:GetService(\"" .. inst.ClassName .. "\")" -- simplified
+            return "game:GetService(\"" .. inst.ClassName .. "\")"
         end
         return "nil"
     end)
@@ -589,14 +590,13 @@ end
 -- ============================================================
 --  REMOTE LOGGING - FIX DUPLICATE
 -- ============================================================
-local processedRemotes = {}
 local lastRemoteLog = {}
 
 local function newRemote(type, name, args, remote, blocked)
-    -- Check for duplicate (same remote, same args within 1 second)
-    local key = tostring(remote) .. ":" .. tostring(name) .. ":" .. tostring(args)
+    -- Check for duplicate (same remote, same args within 0.5 second)
+    local key = tostring(remote) .. ":" .. tostring(name) .. ":" .. HttpService:JSONEncode(args)
     local now = tick()
-    if lastRemoteLog[key] and (now - lastRemoteLog[key] < 1) then
+    if lastRemoteLog[key] and (now - lastRemoteLog[key] < 0.5) then
         return -- Skip duplicate
     end
     lastRemoteLog[key] = now
@@ -700,14 +700,6 @@ local originalInvokeServer = nil
 local remoteEvent = Instance.new("RemoteEvent")
 local remoteFunction = Instance.new("RemoteFunction")
 
-local function hookRemote(type, remote, ...)
-    if type == "event" then
-        return originalFireServer(remote, ...)
-    else
-        return originalInvokeServer(remote, ...)
-    end
-end
-
 local function toggleSpy()
     toggle = not toggle
     
@@ -734,8 +726,8 @@ local function toggleSpy()
             end)
         end)
         
-        Title.Text = "✦ SimpleSpy v2 [ACTIVE]"
-        Title.TextColor3 = Color3.fromRGB(100, 255, 150)
+        TitleBtn.Text = "✦ SimpleSpy v2 [ACTIVE]"
+        TitleBtn.TextColor3 = Color3.fromRGB(100, 255, 150)
     else
         -- Unhook
         pcall(function()
@@ -749,8 +741,8 @@ local function toggleSpy()
             end
         end)
         
-        Title.Text = "✦ SimpleSpy v2 [INACTIVE]"
-        Title.TextColor3 = Color3.fromRGB(180, 200, 255)
+        TitleBtn.Text = "✦ SimpleSpy v2 [INACTIVE]"
+        TitleBtn.TextColor3 = Color3.fromRGB(180, 200, 255)
     end
 end
 
@@ -891,15 +883,15 @@ BPClearBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Toggle Spy (Click on title)
-Title.MouseButton1Click:Connect(toggleSpy)
+-- Toggle Spy (Click on title button)
+TitleBtn.MouseButton1Click:Connect(toggleSpy)
 
 -- ============================================================
 --  INITIALIZATION
 -- ============================================================
 Background.Visible = true
-Title.Text = "✦ SimpleSpy v2 [INACTIVE]"
-Title.TextColor3 = Color3.fromRGB(180, 200, 255)
+TitleBtn.Text = "✦ SimpleSpy v2 [INACTIVE]"
+TitleBtn.TextColor3 = Color3.fromRGB(180, 200, 255)
 
 -- Auto-start logging
 task.wait(0.5)
