@@ -2,57 +2,6 @@ if _G.SimpleSpyExecuted and type(_G.SimpleSpyShutdown) == "function" then
 	print(pcall(_G.SimpleSpyShutdown))
 end
 
--- ============================================================
---  FUNGSI SHUTDOWN BERSIH
--- ============================================================
-_G.SimpleSpyShutdown = function()
-    print("[SimpleSpy] Shutting down...")
-    
-    -- Bersihkan semua hook
-    if isHooked then
-        toggle = true
-        toggleSpy()
-    end
-    
-    -- Bersihkan GUI
-    pcall(function() 
-        if SimpleSpy2 then SimpleSpy2:Destroy() end
-    end)
-    pcall(function() 
-        if OpenButtonGui then OpenButtonGui:Destroy() end
-    end)
-    
-    -- Bersihkan data
-    processedRemotes = {}
-    lastCallTime = {}
-    logs = {}
-    remoteLogs = {}
-    
-    print("[SimpleSpy] Shutdown complete")
-    return true
-end
-
--- ============================================================
---  FUNGSI CLEANUP DUPLIKAT OTOMATIS
--- ============================================================
-function cleanupDuplicates()
-    local now = tick()
-    for key, value in pairs(processedRemotes) do
-        if type(value) == "boolean" and now - lastCallTime[key] > 5 then  -- Lebih dari 5 detik
-            processedRemotes[key] = nil
-            lastCallTime[key] = nil
-        end
-    end
-end
-
--- Jalankan cleanup setiap 10 detik
-task.spawn(function()
-    while true do
-        task.wait(10)
-        cleanupDuplicates()
-    end
-end)
-
 if not getgenv then
 	getgenv = function() return getfenv(0) end
 end
@@ -112,6 +61,10 @@ end
 
 if not getcallingscript then
 	getcallingscript = function() return nil end
+end
+
+if not checkcaller then
+	checkcaller = function() return false end
 end
 
 if not identifyexecutor then
@@ -255,6 +208,17 @@ local MinimizeButton = Instance.new("TextButton")
 local ImageLabel_3 = Instance.new("ImageLabel")
 local ToolTip = Instance.new("Frame")
 local TextLabel = Instance.new("TextLabel")
+local SettingsButton = Instance.new("ImageButton")
+local SettingsGui = Instance.new("ScreenGui")
+local SettingsTab = Instance.new("Frame")
+local STopBar = Instance.new("Frame")
+local STitle = Instance.new("TextLabel")
+local SCloseButton = Instance.new("TextButton")
+local SBody = Instance.new("Frame")
+local BGScale = Instance.new("UIScale")
+local BypassBtn = Instance.new("TextButton")
+local BypassCorner = Instance.new("UICorner")
+local BypassStatus = Instance.new("TextLabel")
 
 SimpleSpy2.Name = "SimpleSpy2"
 SimpleSpy2.ResetOnSpawn = false
@@ -589,7 +553,7 @@ Simple.BackgroundTransparency = 1
 Simple.Position = UDim2.new(0, 5, 0, 0)
 Simple.Size = UDim2.new(0, 200, 0, 18)
 Simple.Font = Enum.Font.FredokaOne
-Simple.Text = "SimpleSpy Modded By Fenzoxy"
+Simple.Text = "Remote Spy++ By Fenzoxy"
 Simple.TextColor3 = Color3.new(0, 0, 1)
 Simple.TextSize = 11
 Simple.TextXAlignment = Enum.TextXAlignment.Left
@@ -706,6 +670,94 @@ TextLabel.TextWrapped = true
 TextLabel.TextXAlignment = Enum.TextXAlignment.Left
 TextLabel.TextYAlignment = Enum.TextYAlignment.Top
 
+SettingsButton.Name = "SettingsButton"
+SettingsButton.Parent = TopBar
+SettingsButton.BackgroundTransparency = 1
+SettingsButton.Position = UDim2.new(1, -76, 0, 0)
+SettingsButton.Size = UDim2.new(0, 19, 0, 19)
+SettingsButton.Image = "rbxassetid://11932591062"
+SettingsButton.ImageColor3 = Color3.fromRGB(255, 255, 255)
+SettingsButton.ScaleType = Enum.ScaleType.Fit
+
+BGScale.Name = "BGScale"
+BGScale.Parent = Background
+BGScale.Scale = 1
+
+SettingsGui.Name = "SettingsGui"
+SettingsGui.ResetOnSpawn = false
+SettingsGui.DisplayOrder = 1000
+
+SettingsTab.Name = "SettingsTab"
+SettingsTab.Parent = SettingsGui
+SettingsTab.BackgroundColor3 = Color3.fromRGB(45, 45, 48)
+SettingsTab.BorderSizePixel = 0
+SettingsTab.Position = UDim2.new(0, 160, 0, 100)
+SettingsTab.Size = UDim2.new(0, 450, 0, 310)
+SettingsTab.Active = true
+SettingsTab.Draggable = true
+SettingsTab.Visible = false
+
+STopBar.Name = "STopBar"
+STopBar.Parent = SettingsTab
+STopBar.BackgroundColor3 = Color3.fromRGB(37, 35, 38)
+STopBar.BorderSizePixel = 0
+STopBar.Size = UDim2.new(1, 0, 0, 32)
+
+STitle.Name = "STitle"
+STitle.Parent = STopBar
+STitle.BackgroundTransparency = 1
+STitle.Position = UDim2.new(0, 8, 0, 0)
+STitle.Size = UDim2.new(0, 200, 0, 32)
+STitle.Font = Enum.Font.GothamBold
+STitle.Text = "settings"
+STitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+STitle.TextSize = 14
+STitle.TextXAlignment = Enum.TextXAlignment.Left
+
+SCloseButton.Name = "SCloseButton"
+SCloseButton.Parent = STopBar
+SCloseButton.BackgroundColor3 = Color3.fromRGB(37, 35, 38)
+SCloseButton.BorderSizePixel = 0
+SCloseButton.Position = UDim2.new(1, -19, 0, 0)
+SCloseButton.Size = UDim2.new(0, 19, 0, 19)
+SCloseButton.Font = Enum.Font.GothamBold
+SCloseButton.Text = "X"
+SCloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SCloseButton.TextSize = 12
+
+SBody.Name = "SBody"
+SBody.Parent = SettingsTab
+SBody.BackgroundColor3 = Color3.fromRGB(45, 45, 48)
+SBody.BorderSizePixel = 0
+SBody.Position = UDim2.new(0, 0, 0, 32)
+SBody.Size = UDim2.new(1, 0, 1, -32)
+
+BypassBtn.Name = "BypassBtn"
+BypassBtn.Parent = SBody
+BypassBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+BypassBtn.BorderSizePixel = 0
+BypassBtn.Position = UDim2.new(0, 10, 0, 10)
+BypassBtn.Size = UDim2.new(0, 130, 0, 30)
+BypassBtn.Font = Enum.Font.GothamBold
+BypassBtn.Text = "bypass anti cheat"
+BypassBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+BypassBtn.TextSize = 11
+BypassBtn.AutoButtonColor = false
+
+BypassCorner.CornerRadius = UDim.new(0, 6)
+BypassCorner.Parent = BypassBtn
+
+BypassStatus.Name = "BypassStatus"
+BypassStatus.Parent = SBody
+BypassStatus.BackgroundTransparency = 1
+BypassStatus.Position = UDim2.new(0, 145, 0, 10)
+BypassStatus.Size = UDim2.new(0, 250, 0, 30)
+BypassStatus.Font = Enum.Font.Gotham
+BypassStatus.Text = "[BETA] May still be detected on some games"
+BypassStatus.TextColor3 = Color3.fromRGB(120, 120, 120)
+BypassStatus.TextSize = 9
+BypassStatus.TextXAlignment = Enum.TextXAlignment.Left
+
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -733,10 +785,7 @@ local toggle = false
 local gm
 local original
 local prevTables = {}
-local remoteLogs = {}  -- Untuk log
-local processedRemotes = {}  -- Untuk tracking duplikasi
-local isHooked = false  -- Cegah hook ganda
-local lastCallTime = {}  -- Filter duplikat berdasarkan waktu
+local remoteLogs = {}
 local remoteEvent = Instance.new("RemoteEvent")
 local remoteFunction = Instance.new("RemoteFunction")
 local originalEvent = remoteEvent.FireServer
@@ -772,6 +821,9 @@ local showType = true
 local pauseLogging = false
 local maxLogCount = 500
 local logCount = 0
+local isExecutingSpyCode = false
+local bypassEnabled = false
+local settingsOpen = false
 
 function SimpleSpy:ArgsToString(method, args)
 	assert(typeof(method) == "string", "string expected, got " .. typeof(method))
@@ -1196,19 +1248,10 @@ end
 --  newRemote — skip entries whose name is in nameBlocklist
 -- ============================================================
 function newRemote(type, name, args, remote, function_info, blocked, src, returnValue)
-    -- If name is in the nameBlocklist, hide from log entirely
-    if nameBlocklist[name] then return end
-    -- If logging is paused, skip
-    if pauseLogging then return end
-    
-    -- Cek duplikat berdasarkan nama dan args (tambahan filter)
-    local dupKey = name .. "_" .. tostring(#args)
-    for _, log in ipairs(logs) do
-        if log.Name == name and #args == #log.Args then
-            -- Jika sama, update saja bukan tambah baru
-            return
-        end
-    end
+	-- If name is in the nameBlocklist, hide from log entirely
+	if nameBlocklist[name] then return end
+	-- If logging is paused, skip
+	if pauseLogging then return end
 
 	logCount = logCount + 1
 
@@ -1612,57 +1655,42 @@ function taskscheduler()
 end
 
 function remoteHandler(hookfunction, methodName, remote, args, funcInfo, calling, returnValue)
-    -- Buat key unik untuk tracking duplikasi
-    local remoteKey = tostring(remote) .. "_" .. methodName .. "_" .. tostring(#args)
-    
-    -- Cegah duplikasi dengan filter waktu (0.5 detik)
-    local currentTime = tick()
-    if lastCallTime[remoteKey] and currentTime - lastCallTime[remoteKey] < 0.5 then
-        return  -- Abaikan jika dipanggil dalam 0.5 detik
-    end
-    lastCallTime[remoteKey] = currentTime
-    
-    -- Cegah duplikasi dengan tracking
-    if processedRemotes[remoteKey] then 
-        return  -- Jika sudah diproses, abaikan
-    end
-    processedRemotes[remoteKey] = true
-    
-    local validInstance, validClass = pcall(function() return remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") end)
-    if validInstance and validClass then
-        local func = funcInfo.func
-        if not calling then _, calling = pcall(getScriptFromSrc, funcInfo.source) end
-        coroutine.wrap(function() if remoteSignals[remote] then remoteSignals[remote]:Fire(args) end end)()
-        if autoblock then
-            if excluding[remote] then return end
-            if not history[remote] then history[remote] = { badOccurances = 0, lastCall = tick() } end
-            if tick() - history[remote].lastCall < 1 then history[remote].badOccurances += 1; return
-            else history[remote].badOccurances = 0 end
-            if history[remote].badOccurances > 3 then excluding[remote] = true; return end
-            history[remote].lastCall = tick()
-        end
-        local functionInfoStr; local src
-        if func and pcall(islclosure, func) and islclosure(func) then
-            local functionInfo = {}; functionInfo.info = funcInfo
-            pcall(function() functionInfo.constants = debug.getconstants(func) end)
-            pcall(function() functionInfoStr = v2v({ functionInfo = functionInfo }) end)
-            pcall(function() if type(calling) == "userdata" then src = calling end end)
-        end
-        if methodName:lower() == "fireserver" then
-            newRemote("event", remote.Name, args, remote, functionInfoStr, (blocklist[remote] or blocklist[remote.Name]), src)
-        elseif methodName:lower() == "invokeserver" then
-            newRemote("function", remote.Name, args, remote, functionInfoStr, (blocklist[remote] or blocklist[remote.Name]), src, returnValue)
-        end
-        
-        -- Hapus tanda setelah selesai diproses (dengan jeda)
-        task.spawn(function()
-            task.wait(0.1)
-            processedRemotes[remoteKey] = nil
-        end)
-    end
+	local validInstance, validClass = pcall(function() return remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") end)
+	if validInstance and validClass then
+		local func = funcInfo.func
+		if not calling then _, calling = pcall(getScriptFromSrc, funcInfo.source) end
+		coroutine.wrap(function() if remoteSignals[remote] then remoteSignals[remote]:Fire(args) end end)()
+		if autoblock then
+			if excluding[remote] then return end
+			if not history[remote] then history[remote] = { badOccurances = 0, lastCall = tick() } end
+			if tick() - history[remote].lastCall < 1 then history[remote].badOccurances += 1; return
+			else history[remote].badOccurances = 0 end
+			if history[remote].badOccurances > 3 then excluding[remote] = true; return end
+			history[remote].lastCall = tick()
+		end
+		local functionInfoStr; local src
+		if func and pcall(islclosure, func) and islclosure(func) then
+			local functionInfo = {}; functionInfo.info = funcInfo
+			pcall(function() functionInfo.constants = debug.getconstants(func) end)
+			pcall(function() functionInfoStr = v2v({ functionInfo = functionInfo }) end)
+			pcall(function() if type(calling) == "userdata" then src = calling end end)
+		end
+		if methodName:lower() == "fireserver" then
+			newRemote("event", remote.Name, args, remote, functionInfoStr, (blocklist[remote] or blocklist[remote.Name]), src)
+		elseif methodName:lower() == "invokeserver" then
+			newRemote("function", remote.Name, args, remote, functionInfoStr, (blocklist[remote] or blocklist[remote.Name]), src, returnValue)
+		end
+	end
 end
 
 function hookRemote(remoteType, remote, ...)
+	if isExecutingSpyCode then
+		if remoteType == "RemoteEvent" then
+			return originalEvent(remote, ...)
+		else
+			return originalFunction(remote, ...)
+		end
+	end
 	if typeof(remote) == "Instance" then
 		local args = { ... }
 		local validInstance, remoteName = pcall(function() return remote.Name end)
@@ -1698,6 +1726,9 @@ function hookRemote(remoteType, remote, ...)
 end
 
 local newnamecall = newcclosure(function(remote, ...)
+	if isExecutingSpyCode then
+		return original(remote, ...)
+	end
 	if typeof(remote) == "Instance" then
 		local args = { ... }
 		local methodName = getnamecallmethod()
@@ -1732,56 +1763,57 @@ local newFireServer = newcclosure(function(...) return hookRemote("RemoteEvent",
 local newInvokeServer = newcclosure(function(...) return hookRemote("RemoteFunction", ...) end)
 
 function toggleSpy()
-    if not toggle then
-        -- Cegah pemasangan hook ganda
-        if isHooked then 
-            print("[SimpleSpy] Hook already installed, skipping...")
-            return 
-        end
-        
-        -- Try hookmetamethod first (Synapse, Fluxus, etc.)
-        if hookmetamethod then
-            local ok, oldNamecall = pcall(hookmetamethod, game, "__namecall", newnamecall)
-            if ok and oldNamecall then
-                original = original or function(...) return oldNamecall(...) end
-                _G.OriginalNamecall = original
-            end
-        end
-        -- Fallback: direct __namecall replacement (Arceus X, Codex, Delta, etc.)
-        if not original then
-            local ok, mt = pcall(getrawmetatable, game)
-            if ok and mt then
-                gm = mt
-                original = function(...) return gm.__namecall(...) end
-                pcall(setreadonly, gm, false)
-                pcall(function() gm.__namecall = newnamecall end)
-                pcall(setreadonly, gm, true)
-            end
-        end
-        -- Hook FireServer / InvokeServer directly (most executors support this)
-        pcall(function()
-            originalEvent = hookfunction(remoteEvent.FireServer, newFireServer)
-            originalFunction = hookfunction(remoteFunction.InvokeServer, newInvokeServer)
-        end)
-        
-        isHooked = true  -- Tandai bahwa hook sudah terpasang
-        print("[SimpleSpy] Hook installed successfully")
-    else
-        if hookmetamethod then
-            pcall(function() if original then hookmetamethod(game, "__namecall", original) end end)
-        elseif gm then
-            pcall(setreadonly, gm, false)
-            pcall(function() if original then gm.__namecall = original end end)
-            pcall(setreadonly, gm, true)
-        end
-        pcall(function()
-            hookfunction(remoteEvent.FireServer, originalEvent)
-            hookfunction(remoteFunction.InvokeServer, originalFunction)
-        end)
-        
-        isHooked = false  -- Tandai bahwa hook sudah dicabut
-        print("[SimpleSpy] Hook uninstalled")
-    end
+	if not toggle then
+		-- Try hookmetamethod first (Synapse, Fluxus, etc.)
+			if hookmetamethod then
+			if bypassEnabled then
+				local ok, oldNamecall = pcall(hookmetamethod, game, "__namecall", newcclosure(function(remote, ...)
+					if checkcaller() then
+						return oldNamecall(remote, ...)
+					end
+					return newnamecall(remote, ...)
+				end))
+				if ok and oldNamecall then
+					original = original or function(...) return oldNamecall(...) end
+					_G.OriginalNamecall = original
+				end
+			else
+				local ok, oldNamecall = pcall(hookmetamethod, game, "__namecall", newnamecall)
+				if ok and oldNamecall then
+					original = original or function(...) return oldNamecall(...) end
+					_G.OriginalNamecall = original
+				end
+			end
+		end
+		-- Fallback: direct __namecall replacement (Arceus X, Codex, Delta, etc.)
+		if not original then
+			local ok, mt = pcall(getrawmetatable, game)
+			if ok and mt then
+				gm = mt
+				original = function(...) return gm.__namecall(...) end
+				pcall(setreadonly, gm, false)
+				pcall(function() gm.__namecall = newnamecall end)
+				pcall(setreadonly, gm, true)
+			end
+		end
+		-- Hook FireServer / InvokeServer directly (most executors support this)
+		pcall(function()
+			originalEvent = hookfunction(remoteEvent.FireServer, newFireServer)
+			originalFunction = hookfunction(remoteFunction.InvokeServer, newInvokeServer)
+		end)
+	else
+		if hookmetamethod then
+			pcall(function() if original then hookmetamethod(game, "__namecall", original) end end)
+		elseif gm then
+			pcall(setreadonly, gm, false)
+			pcall(function() if original then gm.__namecall = original end end)
+			pcall(setreadonly, gm, true)
+		end
+		pcall(function()
+			hookfunction(remoteEvent.FireServer, originalEvent)
+			hookfunction(remoteFunction.InvokeServer, originalFunction)
+		end)
+	end
 end
 
 function toggleSpyMethod() toggleSpy(); toggle = not toggle end
@@ -1792,7 +1824,8 @@ function shutdown()
 	if schedulerconnect then schedulerconnect:Disconnect() end
 	for _, connection in pairs(connections) do coroutine.wrap(function() connection:Disconnect() end)() end
 	pcall(function() SimpleSpy2:Destroy() end)
-	pcall(function() OpenButtonGui:Destroy() end)
+    pcall(function() OpenButtonGui:Destroy() end)
+    pcall(function() SettingsGui:Destroy() end)
 	pcall(function()
 		hookfunction(remoteEvent.FireServer, originalEvent)
 		hookfunction(remoteFunction.InvokeServer, originalFunction)
@@ -1918,6 +1951,7 @@ if not _G.SimpleSpyExecuted then
 		pcall(syn.protect_gui, SimpleSpy2)
 		bringBackOnResize()
 		SimpleSpy2.Parent = getSafeGuiParent()
+	    SettingsGui.Parent = getSafeGuiParent()
 
 		-- Detect executor name and show Roblox notification
 		coroutine.wrap(function()
@@ -2097,6 +2131,117 @@ else
 end
 
 ----- ADD ONS -----
+
+SettingsButton.MouseEnter:Connect(function()
+	TweenService:Create(SettingsButton, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(100, 200, 255) }):Play()
+end)
+
+SettingsButton.MouseLeave:Connect(function()
+	TweenService:Create(SettingsButton, TweenInfo.new(0.2), { ImageColor3 = Color3.fromRGB(255, 255, 255) }):Play()
+end)
+
+SCloseButton.MouseEnter:Connect(function()
+	TweenService:Create(SCloseButton, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(255, 60, 60) }):Play()
+end)
+
+SCloseButton.MouseLeave:Connect(function()
+	TweenService:Create(SCloseButton, TweenInfo.new(0.2), { BackgroundColor3 = Color3.fromRGB(37, 35, 38) }):Play()
+end)
+
+local function openSettings()
+	if settingsOpen then return end
+	settingsOpen = true
+	DonateButton.Visible = false
+	DiscordButton.Visible = false
+	local shrinkTween = TweenService:Create(BGScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 0.3 })
+	shrinkTween:Play()
+	shrinkTween.Completed:Wait()
+	Background.Visible = false
+	SettingsTab.Visible = true
+end
+
+local function closeSettings()
+	if not settingsOpen then return end
+	settingsOpen = false
+	SettingsTab.Visible = false
+	Background.Visible = true
+	BGScale.Scale = 0.3
+	local growTween = TweenService:Create(BGScale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 })
+	growTween:Play()
+	DonateButton.Visible = true
+	DiscordButton.Visible = true
+end
+
+SettingsButton.MouseButton1Click:Connect(openSettings)
+SCloseButton.MouseButton1Click:Connect(closeSettings)
+
+local function applyBypass()
+	if not toggle then return end
+	if bypassEnabled then
+		if hookmetamethod then
+			pcall(function()
+				local mt = getrawmetatable(game)
+				if mt then
+					setreadonly(mt, false)
+					local oldNamecall = mt.__namecall
+					mt.__namecall = newcclosure(function(remote, ...)
+						if checkcaller() then
+							return oldNamecall(remote, ...)
+						end
+						return newnamecall(remote, ...)
+					end)
+					setreadonly(mt, true)
+				end
+			end)
+		end
+	else
+		if hookmetamethod then
+			pcall(function()
+				local mt = getrawmetatable(game)
+				if mt then
+					setreadonly(mt, false)
+					mt.__namecall = newnamecall
+					setreadonly(mt, true)
+				end
+			end)
+		end
+	end
+end
+
+BypassBtn.MouseButton1Click:Connect(function()
+	bypassEnabled = not bypassEnabled
+	if bypassEnabled then
+		BypassBtn.BackgroundColor3 = Color3.fromRGB(40, 160, 60)
+		BypassBtn.Text = "on"
+		BypassStatus.Text = "Bypass active - hooks hidden from anti-cheat"
+		BypassStatus.TextColor3 = Color3.fromRGB(100, 255, 130)
+	else
+		BypassBtn.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+		BypassBtn.Text = "off"
+		BypassStatus.Text = "Bypass disabled - hooks may be detected"
+		BypassStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+	end
+	applyBypass()
+	task.wait(2)
+	if not bypassEnabled then
+		BypassBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+	end
+end)
+
+BypassBtn.MouseEnter:Connect(function()
+	if not bypassEnabled then
+		TweenService:Create(BypassBtn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(40, 40, 40) }):Play()
+	end
+end)
+
+BypassBtn.MouseLeave:Connect(function()
+	if bypassEnabled then
+		TweenService:Create(BypassBtn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(40, 160, 60) }):Play()
+	else
+		TweenService:Create(BypassBtn, TweenInfo.new(0.15), { BackgroundColor3 = Color3.fromRGB(20, 20, 20) }):Play()
+	end
+end)
+
 newButton("Copy Code", function() return "Click to copy code" end, function()
 	setclipboard(codebox:getString()); TextLabel.Text = "Copied successfully!"
 end)
@@ -2107,7 +2252,9 @@ end)
 
 newButton("Run Code", function() return "Click to execute code" end, function()
 	TextLabel.Text = "Executing..."
+	isExecutingSpyCode = true
 	local ok, err = pcall(function() return loadstring(codebox:getString())() end)
+	isExecutingSpyCode = false
 	if ok then
 		TextLabel.Text = "Executed successfully!"
 	else
@@ -2423,9 +2570,11 @@ end, function()
 	if selected then
 		local script = selected.GenScript
 		if script and not script:find("Generating") then
+			isExecutingSpyCode = true
 			local ok, err = pcall(function()
 				loadstring(script)()
 			end)
+			isExecutingSpyCode = false
 			if ok then TextLabel.Text = "Remote re-fired!"
 			else TextLabel.Text = "Fire error: " .. tostring(err):sub(1, 60) end
 		else
@@ -2449,11 +2598,13 @@ end, function()
 	loopRunning = true
 	TextLabel.Text = "Loop started!"
 
-	loopThread = coroutine.wrap(function()
+		loopThread = coroutine.wrap(function()
 		while loopRunning do
+			isExecutingSpyCode = true
 			local ok, err = pcall(function()
 				loadstring(script)()
 			end)
+			isExecutingSpyCode = false
 			if not ok then
 				TextLabel.Text = "Loop error: " .. tostring(err):sub(1, 50)
 				loopRunning = false
